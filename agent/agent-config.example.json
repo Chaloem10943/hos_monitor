@@ -1,0 +1,6 @@
+{
+  "server_url": "http://192.168.1.10:6001",
+  "agent_token": "COPY_FROM_SERVER_CONFIG",
+  "asset_tag": "",
+  "department": ""
+}

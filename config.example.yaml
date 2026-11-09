@@ -1,0 +1,23 @@
+server:
+  host: "0.0.0.0"
+  port: 6001
+  # Set true only after HTTPS termination is enabled.
+  cookie_secure: false
+
+storage:
+  data_dir: "data"
+  database: "hos_monitor.db"
+
+security:
+  # Generate a unique random value of at least 24 characters for production.
+  agent_token: "REPLACE_WITH_A_LONG_RANDOM_AGENT_TOKEN"
+  session_hours: 8
+
+monitoring:
+  online_threshold_seconds: 300
+
+updates:
+  enabled: false
+  backup_retention: 5
+  public_key: "update_public.pem"
+  server_service_name: "HosMonitorServer"

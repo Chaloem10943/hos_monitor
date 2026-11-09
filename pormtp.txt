@@ -1,0 +1,22 @@
+Act as a Senior System Administrator and Software Engineer.
+ช่วยออกแบบและเขียนโค้ดสำหรับระบบ "IT Asset Management & System Monitoring Agent" เพื่อใช้ติดตามสถานะและตรวจสอบข้อมูลคอมพิวเตอร์ในเครือข่ายภายใน (LAN) ของโรงพยาบาลเมืองจันทร์ โดยเน้นความปลอดภัยของข้อมูล Data Governance และการใช้ทรัพยากรเครื่องที่ต่ำที่สุด
+
+### 🎯 สถาปัตยกรรมระบบ (System Architecture)
+- ทำงานแบบ On-Premise 100% (ข้อมูลไม่ส่งออกอินเทอร์เน็ต)
+- ประกอบด้วย 2 ส่วน:
+  1. Client Agent: สคริปต์ที่รันบนเครื่องลูกข่าย (Windows)
+  2. Server API: ระบบหลังบ้านสำหรับรับข้อมูลและบันทึกลง Database รันบนเซิร์ฟเวอร์ภายในวงแลน (เช่น IP: 192.168.x.x)
+
+### 📋 ความสามารถของ Client Agent
+1. ดึงข้อมูลสเปกเครื่อง (Hardware & OS): Hostname, OS Version, CPU, RAM (Total/Usage), Disk (Total/Free)
+2. ดึงข้อมูล Network: อ่านค่า Local IPv4 ที่ใช้งานจริงในวงแลน (ต้องทำงานได้แม้อยู่ในสถานะ No Internet / ติดหน้า Login) และต้องกรอง IP ปลอมจาก Loopback, VPN หรือ Virtual Machine ออก
+3. ดึงรายชื่อโปรแกรมที่ติดตั้ง (Installed Software): ดึงข้อมูลจาก Windows Registry เท่านั้น (ห้ามใช้ WMI หรือ Get-WmiObject Win32_Product เด็ดขาด เพื่อป้องกัน CPU Spike)
+4. การทำงานเป็น Background: ออกแบบให้รันผ่าน Task Scheduler ได้อย่างเงียบๆ กินทรัพยากร CPU/RAM ต่ำมาก และเมื่อส่งข้อมูลเสร็จให้ปิดโปรแกรมตัวเองทันที (ไม่ต้องมี Loop ค้างใน RAM)
+5. **ข้อจำกัด:** ไม่ต้องใส่ระบบ Remote Control หรือ Command Execution ใดๆ ทั้งสิ้น (ส่งข้อมูลทางเดียวเท่านั้น)
+
+### 🛠️ สิ่งที่ต้องการให้สร้าง (Deliverables)
+1. โค้ด Client Agent: เขียนด้วย PowerShell (เน้นรันง่ายบน Windows) หรือ Python พร้อมวิธีทำเป็น .exe
+2. โค้ด Server API: เขียนด้วย Python (FastAPI) แบบกระชับ พร้อมโครงสร้าง Database (SQLite หรือ PostgreSQL) สำหรับรับ Payload จาก Agent
+3. คำแนะนำการติดตั้ง: วิธีตั้งค่า Windows Task Scheduler เพื่อรัน Agent อัตโนมัติ
+
+โปรดเขียนโค้ดให้คลีน มีคอมเมนต์อธิบายจุดสำคัญ (โดยเฉพาะส่วนที่ใช้กรอง IP และดึง Registry) และพร้อมนำไปรันทดสอบได้ทันที

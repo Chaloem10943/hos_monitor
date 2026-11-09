@@ -1,0 +1,18 @@
+<service>
+  <id>HosMonitorUpdater</id>
+  <name>HosMonitor Updater</name>
+  <description>Verifies, installs and automatically rolls back signed HosMonitor releases.</description>
+  <executable>{{UPDATER_EXE}}</executable>
+  <arguments>--config "{{CONFIG_PATH}}"</arguments>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <stoptimeout>15sec</stoptimeout>
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="60 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <logpath>{{LOG_PATH}}</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>4096</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+</service>

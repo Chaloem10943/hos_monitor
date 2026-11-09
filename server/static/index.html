@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HosMonitor</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" href="/static/assets/favicon-32.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/static/assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div id="toast" class="toast" role="status"></div>
+
+  <main id="authView" class="auth-shell hidden">
+    <section class="auth-card">
+      <div class="brand-mark"><img src="/static/assets/hosmonitor-logo-512.png" alt="HosMonitor"></div>
+      <p class="eyebrow">MUEANG CHAN HOSPITAL</p>
+      <h1 id="authTitle">เข้าสู่ระบบ HosMonitor</h1>
+      <p id="authHint" class="muted">ระบบทะเบียนทรัพย์สินและติดตามสถานะเครื่องภายในโรงพยาบาล</p>
+      <form id="authForm" class="stack">
+        <label>ชื่อผู้ใช้<input id="username" autocomplete="username" required minlength="3"></label>
+        <label>รหัสผ่าน<input id="password" type="password" autocomplete="current-password" required minlength="10"></label>
+        <button id="authSubmit" class="primary" type="submit">เข้าสู่ระบบ</button>
+      </form>
+      <p id="setupNotice" class="notice hidden">การตั้งค่าครั้งแรกทำได้จากเครื่อง Server ผ่าน localhost เท่านั้น</p>
+    </section>
+  </main>
+
+  <div id="appView" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark small"><img src="/static/assets/hosmonitor-logo-512.png" alt=""></span><span><b>HosMonitor</b><small>IT Asset & Health</small></span></div>
+      <nav>
+        <button class="nav-item active" data-view="assets">ภาพรวมและทรัพย์สิน</button>
+        <button class="nav-item admin-only" data-view="control">นโยบายและเรียกเก็บข้อมูล</button>
+        <button class="nav-item admin-only" data-view="settings">ตั้งค่า Agent</button>
+        <button class="nav-item admin-only" data-view="access">ผู้ใช้และ Integration API</button>
+        <button class="nav-item admin-only" data-view="agentUpdates">อัปเดต Agent</button>
+        <button class="nav-item admin-only" data-view="updates">อัปเดตระบบ</button>
+      </nav>
+      <div class="sidebar-foot">
+        <span><span id="currentUser"></span><small id="currentVersion" class="version-label"></small></span>
+        <button id="logoutBtn" class="ghost">ออกจากระบบ</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div><p class="eyebrow">ON-PREMISE MONITORING</p><h1 id="pageTitle">ภาพรวมระบบ</h1></div>
+        <div class="top-actions"><span id="updatedAt" class="muted"></span><button id="refreshBtn" class="secondary">รีเฟรช</button></div>
+      </header>
+
+      <section id="assetsView" class="view">
+        <div class="stat-grid">
+          <article class="stat"><span>ทรัพย์สินทั้งหมด</span><strong id="statTotal">0</strong></article>
+          <article class="stat success"><span>ออนไลน์</span><strong id="statOnline">0</strong></article>
+          <article class="stat muted-stat"><span>ออฟไลน์</span><strong id="statOffline">0</strong></article>
+          <article class="stat warning"><span>ต้องตรวจสอบ</span><strong id="statWarning">0</strong></article>
+          <article class="stat retired-stat"><span>เลิกใช้งาน</span><strong id="statRetired">0</strong></article>
+        </div>
+        <section class="panel">
+          <div class="panel-head"><div><h2>ทะเบียนเครื่อง</h2><p class="muted">สถานะล่าสุดจาก Agent ในเครือข่าย</p></div><a class="button secondary" href="/api/ui/export.csv">ส่งออก CSV</a></div>
+          <form id="filterForm" class="filters">
+            <input id="filterSearch" placeholder="ค้นหา hostname / asset tag / machine ID">
+            <select id="filterDepartment"><option value="">ทุกหน่วยงาน</option></select>
+            <select id="filterOnline"><option value="">ทุกสถานะ</option><option value="true">ออนไลน์</option><option value="false">ออฟไลน์</option></select>
+            <select id="filterLifecycle"><option value="active">กำลังใช้งาน</option><option value="retired">เลิกใช้งานแล้ว</option></select>
+          </form>
+          <div class="table-wrap"><table><thead><tr><th>สถานะ</th><th>ทรัพย์สิน / เครื่อง</th><th>หน่วยงาน</th><th>ระบบปฏิบัติการ</th><th>Agent</th><th>IP</th><th>ทรัพยากร</th><th>พบล่าสุด</th></tr></thead><tbody id="assetRows"></tbody></table></div>
+          <div id="emptyAssets" class="empty hidden">ไม่พบเครื่องตามเงื่อนไข</div>
+          <div class="pager"><span id="pageInfo"></span><div><button id="prevPage" class="ghost">ก่อนหน้า</button><button id="nextPage" class="ghost">ถัดไป</button></div></div>
+        </section>
+      </section>
+
+      <section id="controlView" class="view hidden">
+        <div class="two-col">
+          <section class="panel"><div class="panel-head"><div><h2>นโยบาย Agent</h2><p class="muted">ค่า global ใช้กับทุกเครื่องหากไม่มี policy รายหน่วยงาน</p></div></div>
+            <form id="policyForm" class="form-grid">
+              <label>ขอบเขต<select id="policyScope"><option value="global">ทั้งหมด</option><option value="department">หน่วยงาน</option></select></label>
+              <label>ชื่อหน่วยงาน<select id="policyValue" disabled><option value="">เลือกหน่วยงาน</option></select></label>
+              <label>Heartbeat (วินาที)<input id="heartbeatSeconds" type="number" min="30" value="120"></label>
+              <label>ถือว่า Online ภายใน (วินาที)<input id="onlineSeconds" type="number" min="60" value="300"></label>
+              <label>เก็บหลังเปิดเครื่อง (วินาที)<input id="bootDelay" type="number" min="0" value="600"></label>
+              <label>เวลาเก็บประจำวัน<input id="dailyTime" type="time" value="02:00"></label>
+              <label class="check"><input id="dailyEnabled" type="checkbox"> เปิดการเก็บข้อมูลรายวัน</label>
+              <button class="primary" type="submit">บันทึกนโยบาย</button>
+            </form>
+          </section>
+          <section class="panel"><div class="panel-head"><div><h2>เรียกเก็บข้อมูลทันที</h2><p class="muted">Agent จะรับคำขอใน heartbeat รอบถัดไป</p></div></div>
+            <form id="campaignForm" class="stack">
+              <label>เป้าหมาย<select id="campaignType"><option value="all">ทุกเครื่อง</option><option value="department">หน่วยงาน</option><option value="asset">เครื่องตาม Asset ID</option></select></label>
+              <label id="campaignDepartmentLabel" class="hidden">หน่วยงาน<select id="campaignDepartment" disabled><option value="">เลือกหน่วยงาน</option></select></label>
+              <label id="campaignAssetLabel" class="hidden">Asset ID<input id="campaignValue" disabled placeholder="หมายเลข Asset ID"></label>
+              <button class="primary" type="submit">สร้างคำขอเก็บข้อมูล</button>
+            </form>
+            <div id="campaignList" class="compact-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="settingsView" class="view hidden">
+        <div class="two-col">
+          <section class="panel">
+            <div class="panel-head"><div><h2>ทะเบียนหน่วยงาน</h2><p class="muted">ใช้เป็นรายการให้เลือกในการตั้งค่าเครื่องและนโยบาย</p></div></div>
+            <form id="departmentForm" class="inline-form">
+              <input id="departmentName" placeholder="ชื่อหน่วยงาน เช่น OPD, LAB" required maxlength="200">
+              <button class="primary" type="submit">เพิ่มหน่วยงาน</button>
+            </form>
+            <div id="departmentList" class="compact-list"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><h2>ภาพพื้นหลังทุกเครื่อง</h2><p class="muted">JPG/PNG ไม่เกิน 10 MB · รูปแบบ Fill · ผู้ใช้เปลี่ยนไม่ได้</p></div></div>
+            <form id="wallpaperForm" class="stack">
+              <label>เลือกรูปภาพ<input id="wallpaperFile" type="file" accept="image/jpeg,image/png" required></label>
+              <button class="primary" type="submit">อัปโหลดและบังคับใช้ทุกเครื่อง</button>
+            </form>
+            <div id="wallpaperCurrent" class="wallpaper-current muted">ยังไม่ได้กำหนดภาพพื้นหลัง</div>
+            <button id="disableWallpaper" class="ghost hidden" type="button">ยกเลิกการบังคับภาพพื้นหลัง</button>
+            <div class="settings-divider"></div>
+            <div class="panel-head"><div><h3>เครื่องที่ละเว้นการเปลี่ยนภาพ</h3><p class="muted">เครื่องที่ยกเว้นจะปลดล็อกให้ผู้ใช้เปลี่ยนภาพเอง และกลับมารับภาพส่วนกลางเมื่อนำออก</p></div><strong id="wallpaperExclusionCount" class="count-badge">0 เครื่อง</strong></div>
+            <div class="stack compact-stack admin-only">
+              <label>ค้นหาเครื่อง<input id="wallpaperExclusionSearch" placeholder="พิมพ์ชื่อเครื่อง / hostname / asset tag / machine ID" maxlength="200"></label>
+              <label>เหตุผล (ไม่บังคับ)<input id="wallpaperExclusionReason" placeholder="เช่น เครื่องประชาสัมพันธ์" maxlength="500"></label>
+              <div id="wallpaperExclusionResults" class="compact-list search-results"><p class="muted">พิมพ์เพื่อค้นหาเครื่องที่กำลังใช้งาน</p></div>
+            </div>
+            <div id="wallpaperExclusionList" class="compact-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="accessView" class="view hidden">
+        <div class="two-col">
+          <section class="panel"><div class="panel-head"><div><h2>Integration API keys</h2><p class="muted">คีย์แบบอ่านอย่างเดียวสำหรับ /api/v1/</p></div></div>
+            <form id="apiKeyForm" class="inline-form"><input id="apiKeyName" placeholder="ชื่อระบบที่เชื่อมต่อ" required><button class="primary">สร้าง API key</button></form>
+            <div id="newKey" class="secret-box hidden"></div><div id="apiKeyList" class="compact-list"></div>
+          </section>
+          <section class="panel"><div class="panel-head"><div><h2>ผู้ใช้งาน</h2><p class="muted">Admin จัดการระบบ ส่วน Viewer อ่านข้อมูลเท่านั้น</p></div></div>
+            <form id="userForm" class="stack"><label>ชื่อผู้ใช้<input id="newUsername" required minlength="3"></label><label>รหัสผ่าน<input id="newPassword" type="password" required minlength="10"></label><label>บทบาท<select id="newRole"><option value="viewer">Viewer</option><option value="admin">Admin</option></select></label><button class="primary">เพิ่มผู้ใช้</button></form>
+            <div id="userList" class="compact-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="agentUpdatesView" class="view hidden">
+        <div class="update-banner">
+          <div><p class="eyebrow">SIGNED AGENT RELEASE</p><h2>สั่งอัปเดต Agent จากส่วนกลาง</h2><p>Agent รับเฉพาะไฟล์ .hmagent ที่มีลายเซ็นถูกต้อง และอัปเดตเฉพาะไฟล์ Agent ที่กำหนดไว้เท่านั้น</p></div>
+          <div class="update-state"><span>การกระจายรุ่น</span><strong>7 วัน</strong><small>Agent รับคำสั่งใน heartbeat รอบถัดไป</small></div>
+        </div>
+        <div class="two-col">
+          <section class="panel">
+            <div class="panel-head"><div><h2>1. นำเข้า Agent release</h2><p class="muted">สร้างบนเครื่องพัฒนาด้วย Build-AgentRelease.ps1</p></div></div>
+            <form id="agentReleaseForm" class="stack">
+              <label>ไฟล์ signed Agent release<input id="agentReleaseBundle" type="file" accept=".hmagent,application/octet-stream" required></label>
+              <label>รหัสผ่าน Admin<input id="agentReleasePassword" type="password" autocomplete="current-password" required></label>
+              <button class="primary" type="submit">ตรวจลายเซ็นและนำเข้า</button>
+            </form>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><h2>2. สั่งอัปเดต</h2><p class="muted">เลือกทุกเครื่อง หน่วยงาน หรือ Asset ID · เครื่องที่มีเวอร์ชันตรงกับรุ่นเป้าหมายแล้วจะนับว่าสำเร็จโดยไม่ติดตั้งซ้ำ</p></div></div>
+            <form id="agentRolloutForm" class="stack">
+              <label>รุ่น Agent<select id="agentReleaseSelect" required><option value="">ยังไม่มี release</option></select></label>
+              <label>เป้าหมาย<select id="agentRolloutType"><option value="all">ทุกเครื่อง</option><option value="department">หน่วยงาน</option><option value="asset">เครื่องตาม Asset ID</option></select></label>
+              <label id="agentRolloutDepartmentLabel" class="hidden">หน่วยงาน<select id="agentRolloutDepartment" disabled><option value="">เลือกหน่วยงาน</option></select></label>
+              <label id="agentRolloutAssetLabel" class="hidden">Asset ID<input id="agentRolloutAsset" disabled inputmode="numeric" placeholder="หมายเลข Asset ID"></label>
+              <label>รหัสผ่าน Admin<input id="agentRolloutPassword" type="password" autocomplete="current-password" required></label>
+              <label>พิมพ์ UPDATE AGENT เพื่อยืนยัน<input id="agentRolloutConfirmation" required pattern="UPDATE AGENT"></label>
+              <button class="danger-button" type="submit">สั่งอัปเดต Agent</button>
+            </form>
+          </section>
+        </div>
+        <section class="panel update-history-panel">
+          <div class="panel-head"><div><h2>สถานะการกระจาย Agent</h2><p class="muted">แสดงจำนวนเครื่องที่รับคำสั่ง สำเร็จ รอดำเนินการ และล้มเหลว</p></div></div>
+          <div id="agentRolloutList" class="compact-list"></div>
+        </section>
+      </section>
+
+      <section id="updatesView" class="view hidden">
+        <div class="update-banner">
+          <div><p class="eyebrow">SIGNED OFFLINE RELEASE</p><h2>อัปเดตจากเครื่องพัฒนาไปยังเครื่องแม่</h2><p>เครื่องแม่ไม่เชื่อมต่ออินเทอร์เน็ต รับเฉพาะไฟล์ .hmrelease ที่ผ่านลายเซ็นของโรงพยาบาล</p></div>
+          <div class="update-state"><span>เวอร์ชันปัจจุบัน</span><strong id="updateCurrentVersion">-</strong><small id="updateStateText">กำลังอ่านสถานะ</small></div>
+        </div>
+        <div class="two-col">
+          <section class="panel">
+            <div class="panel-head"><div><h2>นโยบายอัปเดต</h2><p class="muted">ตั้งค่าครั้งแรกบนเครื่องแม่เท่านั้น</p></div></div>
+            <form id="updateConfigForm" class="stack">
+              <label>จำนวนชุดสำรองที่เก็บ<input id="updateRetention" type="number" min="1" max="20" value="5"></label>
+              <label class="check"><input id="updateEnabled" type="checkbox"> อนุญาตให้ Admin นำเข้า signed release</label>
+              <label>รหัสผ่าน Admin เพื่อบันทึก<input id="updateConfigPassword" type="password" autocomplete="current-password" required></label>
+              <button class="primary" type="submit">บันทึกการตั้งค่า</button>
+            </form>
+            <div id="updateTrust" class="trust-box"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><h2>นำเข้า release</h2><p class="muted">สร้างไฟล์นี้จากเครื่องพัฒนาด้วย Build-Release.ps1</p></div></div>
+            <form id="installUpdateForm" class="stack">
+              <label>ไฟล์ signed release<input id="updateBundle" type="file" accept=".hmrelease,application/octet-stream" required></label>
+              <label>รหัสผ่าน Admin<input id="installPassword" type="password" autocomplete="current-password" required></label>
+              <label>พิมพ์ UPDATE เพื่อยืนยัน<input id="installConfirmation" required pattern="UPDATE"></label>
+              <button class="danger-button" type="submit">ตรวจลายเซ็น สำรอง และติดตั้ง</button>
+            </form>
+          </section>
+        </div>
+        <section class="panel update-history-panel">
+          <div class="panel-head"><div><h2>ประวัติอัปเดตและย้อนกลับ</h2><p class="muted">การย้อนกลับจะสำรองสถานะปัจจุบันก่อนทุกครั้ง</p></div></div>
+          <div id="updateHistory" class="compact-list"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="assetDialog"><div class="dialog-head"><div><p class="eyebrow">ASSET DETAIL</p><h2 id="detailTitle"></h2></div><button id="closeDialog" class="ghost">ปิด</button></div><div id="assetDetail"></div></dialog>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+Tool: built-in ImageGen
+Use case: precise-object-edit
+Selected source: HosMonitor concept 3
+
+Refine the selected concept into a production-ready logo while preserving a central desktop monitor with a health pulse, one circular network ring, and four connection nodes. Keep a strong centered silhouette with transparent margin, navy and teal brand colors, a genuinely transparent background, no text, no watermark, no external trademark, and no red cross or protected medical emblem. Simplify only details that disappear at favicon size.

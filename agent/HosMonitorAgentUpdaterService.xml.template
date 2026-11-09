@@ -1,0 +1,17 @@
+<service>
+  <id>HosMonitorAgentUpdater</id>
+  <name>HosMonitor Agent Updater</name>
+  <description>Verifies and installs signed HosMonitor Agent updates as LocalSystem.</description>
+  <executable>{{UPDATER_EXE}}</executable>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <stoptimeout>20sec</stoptimeout>
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="60 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <logpath>{{LOG_PATH}}</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>2048</sizeThreshold>
+    <keepFiles>3</keepFiles>
+  </log>
+</service>

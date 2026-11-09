@@ -1,0 +1,12 @@
+__pycache__/
+.pytest_cache/
+.venv/
+build/
+dist/
+data/
+config.yaml
+dev-secrets/
+build/bootstrap-config.json
+production-config.yaml
+release-output/
+*.pyc

@@ -1,0 +1,23 @@
+<service>
+  <id>HosMonitorServer</id>
+  <name>HosMonitor Server</name>
+  <description>On-premise IT asset monitoring dashboard and API.</description>
+  <executable>{{SERVER_EXE}}</executable>
+  <env name="HOS_MONITOR_CONFIG" value="{{CONFIG_PATH}}" />
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <stoptimeout>30sec</stoptimeout>
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="60 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <serviceaccount>
+    <domain>NT AUTHORITY</domain>
+    <user>LocalService</user>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+  <logpath>{{LOG_PATH}}</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>4096</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+</service>
