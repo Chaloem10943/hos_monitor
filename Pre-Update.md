@@ -424,3 +424,33 @@
 - การเก็บกวาด: ยืนยันว่า `build\bootstrap-config.json` ถูกลบหลัง build แล้ว
 - Migration/Server: ไม่มี migration, ไม่เปลี่ยนฐานข้อมูล และไม่เปลี่ยน Server; rollback ใช้ backup เดิมของ Agent Setup ตามขั้นตอนที่ระบุด้านบน
 - งานติดตาม: ติดตั้งไฟล์ใหม่แบบ Run as administrator บนเครื่องลูกที่มีปัญหา แล้วตรวจ Service, heartbeat, first inventory และการปรากฏในทะเบียนเป็น Agent `1.0.10`
+
+## รายการ: เชื่อมต่อระบบอัปเดต HosMonitor ผ่าน GitHub Releases
+
+### 1. วัตถุประสงค์และเหตุผล
+- ผู้ใช้ต้องการวางแผนและพัฒนาการอัปเดตระบบ HosMonitor ผ่าน GitHub
+- เพื่อให้ GitHub เป็นศูนย์กลางจัดเก็บ Source Code (Chaloem10943/hos_monitor) และเป็นช่องทางกระจายแพ็กเกจ Release (.hmrelease, .hmagent, Setup.exe) สำหรับเครื่องแม่
+
+### 2. ขอบเขตการดำเนินงาน
+- [x] Initialise Git และ Push ซอร์สโค้ดตั้งต้นขึ้น GitHub Repo Chaloem10943/hos_monitor บน branch main
+- [x] ป้องกันความปลอดภัย: กรอง .gitignore ห้ามนำ update_private.pem, production-config.yaml และฐานข้อมูลขึ้น GitHub
+- [x] ปรับปรุงสคริปต์ scripts\Publish-Release.ps1 ให้รองรับการอัปโหลด Release Assets แบบครบชุด (รวม Setup EXEs) และรองรับการอัปโหลดทับ Release เดิมได้หากมีอยู่แล้ว
+- [x] ปล่อย Release แรก v1.0.9 ขึ้น GitHub Releases ที่ https://github.com/Chaloem10943/hos_monitor/releases/tag/v1.0.9 พร้อม Assets:
+  - HosMonitorServer-1.0.9.hmrelease
+  - HosMonitorServer-update-1.0.9.zip
+  - HosMonitorServerSetup-1.0.9.exe
+  - manifest.json
+  - manifest.sig
+- [x] พัฒนาสคริปต์ scripts\Update-HosMonitorFromGitHub.ps1 สำหรับเครื่องแม่:
+  - ตรวจสอบเวอร์ชันล่าสุดจาก GitHub Releases อัตโนมัติ (รองรับทั้ง gh.exe และ GitHub Web API)
+  - ดาวน์โหลดไฟล์ .hmrelease, .hmagent, .sig, .json มาไว้ที่เครื่องแม่
+  - แสดงคำแนะนำและขั้นตอนการ Import อัปเดตเข้าระบบ HosMonitor
+
+### 3. ผลการทดสอบ
+- รัน pytest: ผ่าน 45/45 รายการ (Starlette warning 1 รายการตามปกติ)
+- ทดสอบรัน scripts\Update-HosMonitorFromGitHub.ps1 -CheckOnly: ตรวจจับเวอร์ชันติดตั้ง 1.0.9 และเวอร์ชันบน GitHub 1.0.9 ถูกต้อง
+- ทดสอบรัน scripts\Update-HosMonitorFromGitHub.ps1 -Force: ดาวน์โหลด Release Assets จาก GitHub สำเร็จสมบูรณ์
+
+### 4. การอนุมัติและผลกระทบ
+- ผู้อนุมัติ: ผู้ใช้อนุมัติผ่านแชตเมื่อวันที่ 2026-11-09 ข้อความ: "อนุมัติพัฒนา"
+- ผลกระทบ: ไม่มีผลกระทบเชิงลบต่อระบบเดิม ไม่มีการเปลี่ยนแปลง Database Schema หรือ Windows Services
