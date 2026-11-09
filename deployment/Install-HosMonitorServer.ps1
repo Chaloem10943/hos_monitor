@@ -105,7 +105,7 @@ if (-not (Test-Path -LiteralPath $configPath)) {
         security = [ordered]@{ agent_token = $agentToken; session_hours = 8 }
         monitoring = [ordered]@{ online_threshold_seconds = 300 }
         updates = [ordered]@{
-            enabled = $false; backup_retention = 5
+            enabled = $true; backup_retention = 5
             public_key = "update_public.pem"; server_service_name = "HosMonitorServer"
         }
     }

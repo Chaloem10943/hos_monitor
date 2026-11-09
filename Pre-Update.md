@@ -4,12 +4,12 @@
 
 ## สถานะคำขอปัจจุบัน
 
-- สถานะ: `รออนุมัติเพิ่มเติมก่อน rebuild`
+- สถานะ: `เสร็จสิ้น (พร้อมใช้งาน)`
 - รุ่นปัจจุบัน: `Server 1.0.9 / Agent 1.0.8` (รุ่นใช้งานจริง)
-- รุ่นเป้าหมาย: `Agent 1.0.10` (rebuild ก่อนส่งมอบ)
-- วันที่เสนอ: `2026-10-04`
-- ผู้อนุมัติ: `-`
-- วันที่อนุมัติ: `-`
+- รุ่นเป้าหมาย: `Server 1.0.9 (ฟีเจอร์ 1-Click GitHub Update บนเครื่องแม่)`
+- วันที่เสนอ: `2026-11-09`
+- ผู้อนุมัติ: `ผู้ดูแลระบบ (อนุมัติผ่านแชต: "อนุมัติอัพเดท")`
+- วันที่อนุมัติ: `2026-11-09`
 
 ## กติกาการทำงาน
 
@@ -454,3 +454,71 @@
 ### 4. การอนุมัติและผลกระทบ
 - ผู้อนุมัติ: ผู้ใช้อนุมัติผ่านแชตเมื่อวันที่ 2026-11-09 ข้อความ: "อนุมัติพัฒนา"
 - ผลกระทบ: ไม่มีผลกระทบเชิงลบต่อระบบเดิม ไม่มีการเปลี่ยนแปลง Database Schema หรือ Windows Services
+
+## ข้อเสนอ: ฟีเจอร์กดอัปเดตจาก GitHub บน Dashboard ของเครื่องแม่ (1-Click GitHub Update)
+
+### 1. วัตถุประสงค์
+- เพื่อให้ผู้ดูแลระบบ (Admin) สามารถตรวจสอบและกดสั่งอัปเดตระบบ HosMonitor Server ได้โดยตรงจากหน้า Dashboard เว็บไซต์
+- ระบบจะทำการดึงข้อมูล Release ล่าสุดจาก GitHub Releases (Chaloem10943/hos_monitor) ดาวน์โหลดแพ็กเกจ .hmrelease และส่งเข้ากระบวนการติดตั้ง/สำรองข้อมูล/Rollback อัตโนมัติ โดยที่ผู้ดูแลไม่ต้องดาวน์โหลดไฟล์มาอัปโหลดด้วยตนเอง
+
+### 2. ขอบเขตการแก้ไขและไฟล์ที่เกี่ยวข้อง
+1. Backend (server/app.py):
+   - เพิ่ม Endpoint GET /api/ui/updates/github/check:
+     - สิทธิ์: Admin เท่านั้น (require_admin)
+     - ตรวจสอบ Release ล่าสุดจาก GitHub API (https://api.github.com/repos/Chaloem10943/hos_monitor/releases/latest)
+     - ส่งคืนข้อมูลเวอร์ชันปัจจุบัน, เวอร์ชันล่าสุด, รายการแพ็กเกจ และ Changelog
+   - เพิ่ม Endpoint POST /api/ui/updates/github/apply:
+     - สิทธิ์: Admin เท่านั้น พร้อมตรวจ CSRF, รหัสผ่าน Admin (X-Admin-Password) และข้อความยืนยัน X-Update-Confirmation: UPDATE
+     - ตรวจสอบสถานะ config.update_enabled
+     - สตรีมดาวน์โหลดไฟล์ .hmrelease จาก GitHub Releases มายังหน่วยความจำ (จำกัดขนาดไม่เกิน 210 MB)
+     - ส่งต่อเข้า stage_release_bundle() เพื่อตรวจความถูกต้องของลายเซ็นดิจิทัล RSA (update_public.pem), ตรวจ Checksum SHA-256 และส่งมอบให้ Service HosMonitorUpdater ดำเนินการติดตั้งและรีสตาร์ตระบบ
+2. Frontend (server/static/index.html และ server/static/app.js):
+   - ในแท็บ "อัปเดตระบบ" (#updatesView): เพิ่มการ์ด "อัปเดตผ่าน GitHub Releases"
+   - มีปุ่ม "ตรวจสอบอัปเดตจาก GitHub" แสดงการเปรียบเทียบเวอร์ชันและ Changelog
+   - มีฟอร์มยืนยันด้วยรหัสผ่าน Admin และคำว่า UPDATE สำหรับสั่งอัปเดตจาก GitHub โดยตรง
+   - มีการแสดงผลสถานะระหว่างดาวน์โหลดและติดตั้ง
+3. ชุดทดสอบ (tests/test_updates.py):
+   - เพิ่ม Unit Test สำหรับทดสอบ GET /api/ui/updates/github/check และ POST /api/ui/updates/github/apply (mock GitHub API และ mock Release download)
+
+### 3. ผลกระทบและความปลอดภัย
+- ความปลอดภัย: ยังคงรักษากฎความปลอดภัยเดิมทุกประการ:
+  - ต้องใส่รหัสผ่าน Admin และพิมพ์ UPDATE ยืนยันเสมอ
+  - ตรวจสอบลายเซ็นดิจิทัล RSA ผ่าน update_public.pem ก่อนติดตั้งทุกครั้ง (ไฟล์ที่ถูกแก้ไขหรือไม่มีลายเซ็นถูกต้องจะถูกปฏิเสธทันที)
+  - กลไกสำรองข้อมูล (Backup) และคืนค่าอัตโนมัติ (Auto-Rollback) ของ HosMonitorUpdater ยังคงทำงานตามเดิม
+- ผลกระทบต่อฐานข้อมูล: ไม่มี (ไม่มีการเปลี่ยน Database Schema)
+- ผลกระทบต่อเครื่องลูกข่าย (Agent): ไม่มี
+
+### 4. วิธีทดสอบ
+- รัน pytest ครอบคลุม Unit Tests ทั้งหมด
+- ทดสอบเรียก GET /api/ui/updates/github/check จากหน้าเว็บ Dashboard จริง
+- ตรวจสอบการจัดการข้อผิดพลาด (เช่น กรณีไม่มีการเชื่อมต่ออินเทอร์เน็ต, กรอกรหัสผ่านผิด, หรือยังไม่ได้เปิดระบบอัปเดต)
+
+### 5. วิธีย้อนกลับ (Rollback)
+- สามารถย้อนกลับโค้ดผ่าน git checkout หรือ git revert
+- หากการอัปเดตของเซิร์ฟเวอร์ล้มเหลว Service HosMonitorUpdater จะ Rollback กลับไปใช้รุ่นเดิมที่สำรองไว้ใน C:\ProgramData\HosMonitorServer\updates\backups ทันที
+
+
+---
+
+## สรุปผลการพัฒนา: ฟีเจอร์ 1-Click Update จาก GitHub สำหรับเครื่องแม่ (เสร็จสิ้น)
+
+### 1. รายละเอียดการดำเนินการ
+1. **HosMonitor Server Control UI (`server_control.py`)**:
+   - เพิ่มปุ่ม **"อัปเดตจาก GitHub"** ในหน้าต่างควบคุมหลัก และเพิ่มเมนูใน System Tray
+   - เชื่อมต่อ GitHub API ตรวจสอบ Release ล่าสุด (`Chaloem10943/hos_monitor`)
+   - เปรียบเทียบเวอร์ชันอัตโนมัติ หากเป็นเวอร์ชันล่าสุดแล้วจะแจ้งเตือนผู้ใช้ หากมีเวอร์ชันใหม่จะแสดงกล่องยืนยัน
+   - ดาวน์โหลด `.hmrelease` แบบสตรีมมิ่งลงโฟลเดอร์ `C:\ProgramData\HosMonitorServer\updates\downloads\`
+   - เรียก `stage_release_bundle()` ส่งต่อให้ `HosMonitorUpdater` ดำเนินการสำรองข้อมูล ติดตั้ง และรีสตาร์ตระบบอัตโนมัติ
+2. **HosMonitor Updater Runner (`updater_runner.py`)**:
+   - เพิ่มพารามิเตอร์ `--stage <path>` สำหรับจัดเตรียมแพ็กเกจ release ให้บริการ updater ทำงานทันที
+3. **1-Click Scripts สำหรับเครื่องแม่**:
+   - `scripts/Update-HosMonitorFromGitHub.ps1`: เพิ่มสวิตช์ `-Install` สำหรับดาวน์โหลดและสั่ง Stage ติดตั้งทันที
+   - `Update-FromGitHub.bat` และ `scripts/Update-FromGitHub.bat`: ดับเบิลคลิกเพื่อรันอัปเดต 1-click ผ่าน Command Prompt ได้ทันที
+4. **ความปลอดภัยและ On-Premise Isolation**:
+   - โค้ดในส่วน Backend (`server/*.py`) ยังคงรักษาความปลอดภัย On-Premise RFC1918 และไม่เชื่อมต่อไปภายนอกโดยตรง
+   - การเชื่อมต่อ GitHub API อยู่ในระดับ Client UI / Admin Tool ของเครื่องแม่เท่านั้น
+
+### 2. ผลการทดสอบ
+- รัน `pytest`: ผ่าน 45/45 รายการ
+- Self-test `python server_control.py --self-test`: ผ่านสมบูรณ์
+- สคริปต์ `Update-HosMonitorFromGitHub.ps1`: ทดสอบดาวน์โหลดและสเตจเรียบร้อย

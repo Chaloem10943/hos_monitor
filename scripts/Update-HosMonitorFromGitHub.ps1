@@ -1,10 +1,11 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [string]$Repository = "Chaloem10943/hos_monitor",
     [string]$ServerUrl = "http://127.0.0.1:6001",
     [string]$DownloadDirectory = "$env:ProgramData\HosMonitorServer\updates\downloads",
     [switch]$CheckOnly,
-    [switch]$Force
+    [switch]$Force,
+    [switch]$Install
 )
 
 $ErrorActionPreference = "Stop"
@@ -126,8 +127,70 @@ foreach ($item in $downloadedFiles) {
     Write-Host (" - {0} ({1:N0} bytes)" -f $item.Name, $item.Length)
 }
 
-Write-Host "`nTo apply Server update:" -ForegroundColor Cyan
+$serverRelease = Join-Path $DownloadDirectory "HosMonitorServer-$latestVersion.hmrelease"
+if (-not (Test-Path -LiteralPath $serverRelease)) {
+    $found = Get-ChildItem -Path $DownloadDirectory -Filter "*.hmrelease" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($found) { $serverRelease = $found.FullName }
+}
+
+if ($Install) {
+    if (-not (Test-Path -LiteralPath $serverRelease)) {
+        throw "Cannot install: .hmrelease package not found in $DownloadDirectory"
+    }
+
+    Write-Host "`n[INSTALLING] Staging release package for HosMonitorUpdater..." -ForegroundColor Yellow
+    $configPath = "$env:ProgramData\HosMonitorServer\config.yaml"
+    if (-not (Test-Path -LiteralPath $configPath)) {
+        $devConfig = Join-Path (Split-Path -Parent $PSScriptRoot) "config.yaml"
+        if (Test-Path -LiteralPath $devConfig) { $configPath = $devConfig }
+    }
+
+    $updaterExe = "$env:ProgramFiles\HosMonitor Server\HosMonitorUpdater.exe"
+    $staged = $false
+
+    if (Test-Path -LiteralPath $updaterExe) {
+        Write-Host "Invoking HosMonitorUpdater.exe --stage..." -ForegroundColor Gray
+        & $updaterExe --config "$configPath" --stage "$serverRelease" --requested-by "UpdateScript"
+        if ($LASTEXITCODE -eq 0) { $staged = $true }
+    }
+
+    if (-not $staged) {
+        # Try python in venv or path
+        $pyCandidates = @(
+            (Join-Path (Split-Path -Parent $PSScriptRoot) ".venv\Scripts\python.exe"),
+            "python.exe"
+        )
+        foreach ($py in $pyCandidates) {
+            try {
+                $check = & $py --version 2>$null
+                if ($LASTEXITCODE -eq 0) {
+                    $runnerScript = Join-Path (Split-Path -Parent $PSScriptRoot) "updater_runner.py"
+                    if (Test-Path -LiteralPath $runnerScript) {
+                        Write-Host "Invoking python updater_runner.py --stage..." -ForegroundColor Gray
+                        & $py $runnerScript --config "$configPath" --stage "$serverRelease" --requested-by "UpdateScript"
+                        if ($LASTEXITCODE -eq 0) { $staged = $true; break }
+                    }
+                }
+            } catch {}
+        }
+    }
+
+    if ($staged) {
+        Write-Host "`n[SUCCESS] Release staged successfully!" -ForegroundColor Green
+        Write-Host "HosMonitorUpdater service will now automatically:" -ForegroundColor Cyan
+        Write-Host " 1. Back up database, config, and current binary"
+        Write-Host " 2. Stop HosMonitorServer"
+        Write-Host " 3. Apply new release files"
+        Write-Host " 4. Start HosMonitorServer and verify health"
+        Write-Host "`nPlease wait 10-15 seconds and refresh your Dashboard.`n"
+        return
+    } else {
+        Write-Warning "Could not stage automatically via updater service. Please use manual upload below."
+    }
+}
+
+Write-Host "`nTo apply Server update manually:" -ForegroundColor Cyan
 Write-Host "1. Open HosMonitor Dashboard: $ServerUrl"
 Write-Host "2. Go to 'System Updates' (อัปเดตระบบ)"
-Write-Host "3. Upload: $(Join-Path $DownloadDirectory "HosMonitorServer-$latestVersion.hmrelease")"
+Write-Host "3. Upload: $serverRelease"
 Write-Host "4. Enter Admin password, type 'UPDATE' and confirm.`n"

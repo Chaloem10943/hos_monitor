@@ -247,8 +247,19 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     parser.add_argument("--once", action="store_true")
+    parser.add_argument("--stage", help="Path to .hmrelease bundle to stage for installation")
+    parser.add_argument("--requested-by", default="Administrator", help="Identity requesting update")
     args = parser.parse_args()
     config = load_config(args.config)
+    if args.stage:
+        from server.config import save_update_config
+        from server.updater import stage_release_bundle
+        if not config.update_enabled:
+            config = save_update_config(config, enabled=True, backup_retention=config.update_backup_retention)
+        raw = Path(args.stage).read_bytes()
+        res = stage_release_bundle(config, raw, args.requested_by)
+        print(f"Staged update successfully: {res}")
+        return 0
     recover_interrupted(config)
     while True:
         try:

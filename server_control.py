@@ -170,6 +170,7 @@ class ControlApp:
             menu=pystray.Menu(
                 pystray.MenuItem("เปิดหน้าควบคุม", lambda *_: self.actions.put("show"), default=True),
                 pystray.MenuItem("เปิด Dashboard", lambda *_: self.actions.put("dashboard")),
+                pystray.MenuItem("อัปเดตจาก GitHub", lambda *_: self.actions.put("update_github")),
                 pystray.MenuItem("เริ่มระบบ", lambda *_: self.actions.put("start")),
                 pystray.MenuItem("หยุดและปิดระบบ", lambda *_: self.actions.put("stop_exit")),
                 pystray.Menu.SEPARATOR,
@@ -203,6 +204,7 @@ class ControlApp:
             relief="flat", padx=18, pady=9, font=("Segoe UI", 10, "bold"),
         ).pack(side=LEFT, padx=(0, 8))
         Button(buttons, text="รีเฟรช", command=self.refresh, bg="#314d59", fg="white", relief="flat", padx=14, pady=9).pack(side=LEFT, padx=(0, 8))
+        Button(buttons, text="อัปเดตจาก GitHub", command=self.update_from_github, bg="#0d6efd", fg="white", relief="flat", padx=14, pady=9).pack(side=LEFT, padx=(0, 8))
         Button(buttons, text="เริ่มระบบ", command=self.start_requested, bg="#198754", fg="white", relief="flat", padx=14, pady=9).pack(side=LEFT, padx=(0, 8))
         Button(buttons, text="หยุดระบบ", command=self.stop_requested, bg="#c4332b", fg="white", relief="flat", padx=14, pady=9).pack(side=RIGHT)
 
@@ -292,12 +294,133 @@ class ControlApp:
                 action = self.actions.get_nowait()
                 if action == "show": self.show_window()
                 elif action == "dashboard": webbrowser.open(self.dashboard)
+                elif action == "update_github": self.update_from_github()
                 elif action == "start": self.start_requested()
                 elif action == "stop_exit": self.stop_and_exit()
                 elif action == "exit_control": self.exit_control(); return
         except queue.Empty:
             pass
         self.root.after(150, self._poll_actions)
+
+    def update_from_github(self) -> None:
+        self.values["overall"].set("กำลังตรวจสอบการอัปเดตจาก GitHub...")
+        threading.Thread(target=self._run_github_update, daemon=True).start()
+
+    def _run_github_update(self) -> None:
+        try:
+            repo = "Chaloem10943/hos_monitor"
+            url = f"https://api.github.com/repos/{repo}/releases/latest"
+            req = urllib.request.Request(url, headers={"User-Agent": "HosMonitorServerControl"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            tag_name = data.get("tag_name", "").lstrip("v").strip()
+            if not tag_name:
+                self.root.after(0, lambda: messagebox.showerror("HosMonitor Update", "ไม่พบข้อมูลเวอร์ชันใน GitHub Release"))
+                self.root.after(0, self.refresh)
+                return
+
+            def parse_ver(v: str) -> tuple[int, ...]:
+                nums = re.findall(r"\d+", v)
+                return tuple(int(x) for x in nums) if nums else (0, 0, 0)
+
+            stat = server_status(self.port)
+            current_ver_str = str(stat.get("version", "-"))
+            if current_ver_str == "-" or not current_ver_str:
+                ver_file = INSTALL_DIRECTORY / "VERSION"
+                if ver_file.is_file():
+                    current_ver_str = ver_file.read_text(encoding="utf-8").strip()
+                else:
+                    alt_ver = resource_path("VERSION")
+                    if alt_ver.is_file():
+                        current_ver_str = alt_ver.read_text(encoding="utf-8").strip()
+                    else:
+                        current_ver_str = "0.0.0"
+
+            current_ver = parse_ver(current_ver_str)
+            latest_ver = parse_ver(tag_name)
+
+            if latest_ver <= current_ver:
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "HosMonitor Update",
+                    f"ระบบ HosMonitor เป็นเวอร์ชันล่าสุดแล้ว\n\n"
+                    f"เวอร์ชันปัจจุบัน: {current_ver_str}\n"
+                    f"เวอร์ชันบน GitHub: {tag_name}",
+                ))
+                self.root.after(0, self.refresh)
+                return
+
+            proceed = messagebox.askyesno(
+                "HosMonitor Update",
+                f"พบ HosMonitor เวอร์ชันใหม่: v{tag_name}\n"
+                f"(เวอร์ชันปัจจุบัน: {current_ver_str})\n\n"
+                f"คุณต้องการดาวน์โหลดและติดตั้งอัปเดตทันทีหรือไม่?\n"
+                f"(บริการ HosMonitorUpdater จะสำรองข้อมูลและดำเนินการให้อัตโนมัติ)",
+            )
+            if not proceed:
+                self.root.after(0, self.refresh)
+                return
+
+            assets = data.get("assets", [])
+            bundle_asset = None
+            for item in assets:
+                name = item.get("name", "")
+                if name.endswith(".hmrelease"):
+                    bundle_asset = item
+                    break
+
+            if not bundle_asset:
+                self.root.after(0, lambda: messagebox.showerror(
+                    "HosMonitor Update",
+                    f"ไม่พบไฟล์แพ็กเกจ (.hmrelease) ใน Release v{tag_name}",
+                ))
+                self.root.after(0, self.refresh)
+                return
+
+            asset_name = bundle_asset["name"]
+            download_url = bundle_asset.get("browser_download_url") or bundle_asset.get("url")
+            self.root.after(0, lambda: self.values["overall"].set(f"กำลังดาวน์โหลด {asset_name}..."))
+
+            download_dir = DATA_DIRECTORY / "updates" / "downloads"
+            download_dir.mkdir(parents=True, exist_ok=True)
+            local_bundle_path = download_dir / asset_name
+
+            download_req = urllib.request.Request(download_url, headers={"User-Agent": "HosMonitorServerControl"})
+            with urllib.request.urlopen(download_req, timeout=120) as resp:
+                raw_bundle = resp.read()
+
+            local_bundle_path.write_bytes(raw_bundle)
+
+            self.root.after(0, lambda: self.values["overall"].set("กำลังจัดเตรียมการอัปเดตระบบ..."))
+            from server.config import load_config, save_update_config
+            from server.updater import stage_release_bundle
+
+            config_file = CONFIG_PATH if CONFIG_PATH.is_file() else (resource_path("config.yaml") if resource_path("config.yaml").is_file() else None)
+            if not config_file:
+                raise RuntimeError(f"ไม่พบไฟล์คอนฟิก {CONFIG_PATH}")
+
+            app_config = load_config(config_file)
+            if not app_config.update_enabled:
+                app_config = save_update_config(app_config, enabled=True, backup_retention=app_config.update_backup_retention)
+
+            result = stage_release_bundle(app_config, raw_bundle, "HosMonitorServerControl")
+
+            self.root.after(0, lambda: messagebox.showinfo(
+                "HosMonitor Update",
+                f"ดาวน์โหลดและจัดเตรียมอัปเดต v{tag_name} สำเร็จแล้ว!\n\n"
+                f"ผลลัพธ์: {result.get('message', 'เรียบร้อย')}\n\n"
+                f"บริการ HosMonitorUpdater กำลังดำเนินการ:\n"
+                f"1. สำรองข้อมูลฐานข้อมูลและไฟล์ระบบ\n"
+                f"2. สลับเป็นเวอร์ชันใหม่ v{tag_name}\n"
+                f"3. เริ่มการทำงานของ Server อัตโนมัติ",
+            ))
+            self.root.after(5000, self.refresh)
+        except urllib.error.URLError as e:
+            self.root.after(0, lambda: messagebox.showerror("HosMonitor Update", f"เชื่อมต่อ GitHub ไม่สำเร็จ: {e.reason}"))
+            self.root.after(0, self.refresh)
+        except Exception as e:
+            self.root.after(0, lambda: messagebox.showerror("HosMonitor Update", f"เกิดข้อผิดพลาดในการอัปเดต: {e}"))
+            self.root.after(0, self.refresh)
 
     def run(self) -> None:
         self.root.mainloop()
